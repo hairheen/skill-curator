@@ -1,6 +1,6 @@
 # Skill Curator
 
-<img src="assets/workbuddy-avatar.png" alt="Skill Curator logo" width="160">
+<img src="assets/workbuddy-avatar-liquid-glass.png" alt="Skill Curator logo" width="160">
 
 一个离线 Agent Skill，用于盘点本机 Codex、Claude Code 与 WorkBuddy 的 Skills，发现可能重复的能力、触发词重叠和相反的正文指令，并在审阅差异后安全修改 `description`。Python 3.10+，运行时只用标准库。
 
@@ -31,7 +31,7 @@
 | Claude Code | `~/.claude/skills/skill-curator` | `<project>/.claude/skills/skill-curator` |
 | WorkBuddy | `~/.workbuddy/skills/skill-curator` | `<project>/.workbuddy/skills/skill-curator` |
 
-WorkBuddy 的上传界面请使用专用的 [skill-curator-workbuddy.zip](dist/skill-curator-workbuddy.zip)；头像请上传 [workbuddy-avatar.png](assets/workbuddy-avatar.png)（512×512，PNG，约 74KB）。该包的 ZIP 根目录直接放 `SKILL.md`，只包含运行所需的 `scripts/` 与 `references/`，符合其目录层级限制。导入后可直接说“帮我检查一下 Skill 的安装”。修改源码后运行 `python3 build_workbuddy_zip.py` 可重新生成上传包。
+WorkBuddy 的上传界面请使用专用的 [skill-curator-workbuddy.zip](dist/skill-curator-workbuddy.zip)；头像请上传 [workbuddy-avatar-liquid-glass.png](assets/workbuddy-avatar-liquid-glass.png)（512×512，PNG，约 239KB）。该包的 ZIP 根目录直接放 `SKILL.md`，只包含运行所需的 `scripts/` 与 `references/`，符合其目录层级限制。导入后可直接说“帮我检查一下 Skill 的安装”。修改源码后运行 `python3 build_workbuddy_zip.py` 可重新生成上传包。
 
 从 GitHub 安装到个人目录时，选择与你使用的宿主对应的一条命令：
 
