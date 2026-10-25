@@ -311,13 +311,18 @@ def rules(skill: Skill) -> list[dict]:
                 continue
             if re.search(r"\b(if|when|unless|except|only if)\b|如果|仅当|除非|例外", stripped, re.I):
                 continue
-            positive = bool(POSITIVE.search(stripped) or COMMAND_POSITIVE.search(stripped))
-            negative = bool(NEGATIVE.search(stripped))
+            positive_match = POSITIVE.search(stripped)
+            command_match = COMMAND_POSITIVE.search(stripped)
+            negative_match = NEGATIVE.search(stripped)
+            positive = bool(positive_match or command_match)
+            negative = bool(negative_match)
             if positive == negative:
                 continue
             polarity = "negative" if negative else "positive"
+            tail = stripped[negative_match.end():] if negative_match else stripped[positive_match.end():] if positive_match else stripped
+            action_phrase = " ".join(tail.split()[:6])
             for action, pattern in RULE_ACTIONS.items():
-                if re.search(pattern, stripped, re.I):
+                if re.search(pattern, action_phrase, re.I):
                     result.append({"action": action, "polarity": polarity, "path": skill.path, "line": line_no, "quote": stripped[:240]})
     return result
 
@@ -363,7 +368,36 @@ def audit(skills: list[Skill]) -> dict:
                 pair = next(((left, right) for left in left_rules for right in right_rules if left["polarity"] != right["polarity"]), None)
                 if pair and len(conflicts) < 100:
                     conflicts.append({"type": "possible_rule_conflict", "action": action, "evidence": list(pair)})
-    return {"skills": len(skills), "active_local": len(active), "cached_unverified": len(skills) - len(active), "overlaps": overlaps, "rule_conflicts": conflicts, "security_signals": [dict(skill=s.name, **signal) for s in skills for signal in security_signals(s)]}
+    return {"skills": len(skills), "local_files_found": len(active), "cached_unverified": len(skills) - len(active), "overlaps": overlaps, "rule_conflicts": conflicts, "security_signals": [dict(skill=s.name, **signal) for s in skills for signal in security_signals(s)]}
+
+
+def check_report(skills: list[Skill], warnings: list[str]) -> dict:
+    """One read-only summary for a broad 'check my installed skills' request."""
+    analysis = audit(skills)
+    local = [skill for skill in skills if skill.scope != "cache"]
+    installation_findings = [
+        {"host": skill.host, "name": skill.name, "path": skill.path, "problems": [p for p in skill.problems if p != "symlink_read_only"]}
+        for skill in local
+        if any(p != "symlink_read_only" for p in skill.problems)
+    ]
+    same_name = [item for item in analysis["overlaps"] if item["type"] == "same_name"]
+    return {
+        "summary": {
+            "local_files_found": len(local),
+            "by_host": {host: sum(skill.host == host for skill in local) for host in ("codex", "claude")},
+            "cached_unverified": analysis["cached_unverified"],
+            "installation_findings": len(installation_findings),
+            "same_name": len(same_name),
+            "possible_overlaps": len(analysis["overlaps"]) - len(same_name),
+            "possible_rule_conflicts": len(analysis["rule_conflicts"]),
+        },
+        "installation_findings": installation_findings,
+        "overlaps": analysis["overlaps"],
+        "rule_conflicts": analysis["rule_conflicts"],
+        "security_signals": analysis["security_signals"],
+        "warnings": warnings,
+        "note": "Files found do not prove host activation. Cache entries may be inactive. Review overlap and conflict evidence before changing a skill.",
+    }
 
 
 def route(skills: list[Skill], task: str, host: str) -> dict:
@@ -542,11 +576,11 @@ def validate_skill(path: Path) -> list[str]:
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
-    for name in ("inventory", "audit", "route", "plan", "apply", "rollback", "validate"):
+    for name in ("check", "inventory", "audit", "route", "plan", "apply", "rollback", "validate"):
         c = sub.add_parser(name)
-        if name in {"inventory", "audit", "route", "plan", "validate"}:
+        if name in {"check", "inventory", "audit", "route", "plan", "validate"}:
             c.add_argument("--project", default=".")
-        if name in {"inventory", "audit", "route"}:
+        if name in {"check", "inventory", "audit", "route"}:
             c.add_argument("--host", choices=["both", "codex", "claude"], default="both")
             c.add_argument("--no-cache", action="store_true")
             c.add_argument("--json", action="store_true")
@@ -595,7 +629,26 @@ def main(argv: list[str] | None = None) -> int:
         print("Validation passed" if not errors else "Validation failed:\n" + "\n".join(errors))
         return 1 if errors else 0
     skills, warnings = discover(Path(args.project), include_cache=not args.no_cache, host=args.host)
-    if args.command == "inventory":
+    if args.command == "check":
+        result = check_report(skills, warnings)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            summary = result["summary"]
+            print(f"Local skill files: {summary['local_files_found']} (Codex {summary['by_host']['codex']}, Claude Code {summary['by_host']['claude']})")
+            print(f"Plugin cache entries: {summary['cached_unverified']} (enabled state unverified)")
+            print(f"Installation findings: {summary['installation_findings']}; same names: {summary['same_name']}")
+            print(f"Possible overlaps: {summary['possible_overlaps']}; possible rule conflicts: {summary['possible_rule_conflicts']}")
+            for item in result["installation_findings"][:10]:
+                print("  installation: " + json.dumps(item, ensure_ascii=False))
+            for item in result["overlaps"][:10]:
+                print("  overlap: " + json.dumps(item, ensure_ascii=False))
+            for item in result["rule_conflicts"][:10]:
+                print("  conflict: " + json.dumps(item, ensure_ascii=False))
+            for warning in warnings:
+                print("  warning:", warning)
+            print(result["note"])
+    elif args.command == "inventory":
         result = {"skills": [s.public() for s in skills], "warnings": warnings}
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -611,7 +664,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
-            print(f"{result['active_local']} local skills; {result['cached_unverified']} cache entries (activation unverified)")
+            print(f"{result['local_files_found']} local skill files; {result['cached_unverified']} cache entries (activation unverified)")
             for kind, key in (("Overlap", "overlaps"), ("Rule conflict", "rule_conflicts"), ("Security signal", "security_signals")):
                 print(f"{kind}: {len(result[key])}")
                 for item in result[key][:30]:

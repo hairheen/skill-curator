@@ -11,6 +11,14 @@
 
 本项目的出发点、五个参考项目的完整代码审阅及设计取舍见[研究报告](docs/research.md)。
 
+## 最简单的用法
+
+安装后，直接在 Codex 或 Claude Code 对话里说：
+
+> 帮我检查一下 Skill 的安装，看看有没有重复或冲突。
+
+也可以说“盘点一下我装的 Skills”“这些 Skills 有没有打架”“这个任务该用哪个 Skill”。AI 会运行只读检查并用普通话总结；你不需要记住下面的命令。如果它没有自动选中本 Skill，在 Codex 中说“用 `$skill-curator` 帮我检查”，在 Claude Code 中输入 `/skill-curator`。新安装后若当前对话没发现它，开始一段新对话再试。
+
 ## 安装
 
 将整个 `skill-curator` 文件夹复制到以下任一位置，再让对应宿主重新发现 Skills：
@@ -38,11 +46,12 @@ Codex 中可显式调用 `$skill-curator`；Claude Code 中可调用 `/skill-cur
 SC=/path/to/skill-curator/scripts/skill_curator.py
 python3 "$SC" inventory --project /path/to/project
 python3 "$SC" audit --project /path/to/project
+python3 "$SC" check --project /path/to/project
 python3 "$SC" route --task "整理销售数据并做图表" --host codex --project /path/to/project
 python3 "$SC" validate --skill /path/to/skill-curator/SKILL.md
 ```
 
-每条只读命令可按需使用 `--json`；`inventory`、`audit` 和 `route` 支持 `--host codex|claude|both`、`--no-cache`。缓存项默认会列出，但标记为启用状态未知，路由时不作为候选。
+每条只读命令可按需使用 `--json`；`check`、`inventory`、`audit` 和 `route` 支持 `--host codex|claude|both`、`--no-cache`。缓存项默认会列出，但标记为启用状态未知，路由时不作为候选。
 
 ## 预览、应用与回滚
 

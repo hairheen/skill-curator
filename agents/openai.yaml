@@ -1,4 +1,4 @@
 interface:
   display_name: "Skill Curator"
   short_description: "Audit and tune installed skills"
-  default_prompt: "Use $skill-curator to inventory my skills, find overlaps or conflicting rules, and suggest safe trigger improvements."
+  default_prompt: "用 $skill-curator 帮我检查一下已安装的 Skills，有没有安装问题、重复功能或规则冲突，并给出建议。"

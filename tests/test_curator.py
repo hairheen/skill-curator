@@ -61,9 +61,12 @@ class CuratorTests(unittest.TestCase):
         with patch.object(curator, "roots", return_value=self.mocked_roots()):
             skills, _ = curator.discover(self.base)
             report = curator.audit(skills)
+            quick = curator.check_report(skills, [])
         self.assertTrue(report["overlaps"])
         self.assertTrue(any(x["action"] == "test" for x in report["rule_conflicts"]))
         self.assertTrue(any(x["type"] == "download_and_execute" for x in report["security_signals"]))
+        self.assertEqual(quick["summary"]["local_files_found"], 2)
+        self.assertEqual(quick["summary"]["possible_rule_conflicts"], 1)
         self.assertFalse(marker.exists())
 
     def test_preview_apply_rollback_and_stale_guard(self):
@@ -113,6 +116,16 @@ class CuratorTests(unittest.TestCase):
         updated = curator.replace_description(original, "Find duplicate skills.")
         self.assertIn("metadata:\n  version: 1", updated)
         self.assertEqual(body, curator.frontmatter(updated)[1])
+
+    def test_chinese_request_matches_curator_description(self):
+        manifest = SCRIPT.parents[1] / "SKILL.md"
+        meta, _, _ = curator.frontmatter(manifest.read_text(encoding="utf-8"))
+        self.assertIn("帮我检查一下 skill 的安装", meta["description"])
+        make_skill(self.codex, "skill-curator", meta["description"])
+        with patch.object(curator, "roots", return_value=self.mocked_roots()):
+            skills, _ = curator.discover(self.base)
+        result = curator.route(skills, "帮我检查一下 skill 的安装", "codex")
+        self.assertEqual(result["matches"][0]["name"], "skill-curator")
 
 
 if __name__ == "__main__":
