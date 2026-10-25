@@ -177,11 +177,13 @@ def roots(project: Path, include_cache: bool) -> list[tuple[Path, str, str, bool
         (home / ".agents/skills", "codex", "user", True, False),
         (codex_home / "skills", "codex", "legacy-user", True, False),
         (home / ".claude/skills", "claude", "user", True, False),
+        (home / ".workbuddy/skills", "workbuddy", "user", True, False),
     ]
     for directory in project_dirs(project):
         result.extend([
             (directory / ".agents/skills", "codex", "project", True, False),
             (directory / ".claude/skills", "claude", "project", True, False),
+            (directory / ".workbuddy/skills", "workbuddy", "project", True, False),
         ])
     if include_cache:
         result.extend([
@@ -257,7 +259,7 @@ def discover(project: Path, include_cache: bool = True, host: str = "both") -> t
     warnings: list[str] = []
     seen: set[tuple[str, str]] = set()
     for root, product, scope, mutable, recursive in roots(project, include_cache):
-        if host not in ("both", product):
+        if host not in ("both", "all", product):
             continue
         try:
             paths = scan_root(root, recursive)
@@ -384,7 +386,7 @@ def check_report(skills: list[Skill], warnings: list[str]) -> dict:
     return {
         "summary": {
             "local_files_found": len(local),
-            "by_host": {host: sum(skill.host == host for skill in local) for host in ("codex", "claude")},
+            "by_host": {host: sum(skill.host == host for skill in local) for host in ("codex", "claude", "workbuddy")},
             "cached_unverified": analysis["cached_unverified"],
             "installation_findings": len(installation_findings),
             "same_name": len(same_name),
@@ -401,7 +403,7 @@ def check_report(skills: list[Skill], warnings: list[str]) -> dict:
 
 
 def route(skills: list[Skill], task: str, host: str) -> dict:
-    candidates = [s for s in skills if s.scope != "cache" and (host == "both" or s.host == host)]
+    candidates = [s for s in skills if s.scope != "cache" and (host in ("both", "all") or s.host == host)]
     query = tokens(task)
     wanted = set(infer_capabilities(task))
     scored = []
@@ -581,7 +583,7 @@ def parser() -> argparse.ArgumentParser:
         if name in {"check", "inventory", "audit", "route", "plan", "validate"}:
             c.add_argument("--project", default=".")
         if name in {"check", "inventory", "audit", "route"}:
-            c.add_argument("--host", choices=["both", "codex", "claude"], default="both")
+            c.add_argument("--host", choices=["both", "all", "codex", "claude", "workbuddy"], default="both")
             c.add_argument("--no-cache", action="store_true")
             c.add_argument("--json", action="store_true")
         if name == "route":
@@ -635,7 +637,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             summary = result["summary"]
-            print(f"Local skill files: {summary['local_files_found']} (Codex {summary['by_host']['codex']}, Claude Code {summary['by_host']['claude']})")
+            print(f"Local skill files: {summary['local_files_found']} (Codex {summary['by_host']['codex']}, Claude Code {summary['by_host']['claude']}, WorkBuddy {summary['by_host']['workbuddy']})")
             print(f"Plugin cache entries: {summary['cached_unverified']} (enabled state unverified)")
             print(f"Installation findings: {summary['installation_findings']}; same names: {summary['same_name']}")
             print(f"Possible overlaps: {summary['possible_overlaps']}; possible rule conflicts: {summary['possible_rule_conflicts']}")

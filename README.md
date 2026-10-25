@@ -1,6 +1,6 @@
 # Skill Curator
 
-一个离线 Agent Skill，用于盘点本机 Codex 与 Claude Code 的 Skills，发现可能重复的能力、触发词重叠和相反的正文指令，并在审阅差异后安全修改 `description`。Python 3.10+，运行时只用标准库。
+一个离线 Agent Skill，用于盘点本机 Codex、Claude Code 与 WorkBuddy 的 Skills，发现可能重复的能力、触发词重叠和相反的正文指令，并在审阅差异后安全修改 `description`。Python 3.10+，运行时只用标准库。
 
 它提供四个主要能力：
 
@@ -13,7 +13,7 @@
 
 ## 最简单的用法
 
-安装后，直接在 Codex 或 Claude Code 对话里说：
+安装后，直接在 Codex、Claude Code 或 WorkBuddy 对话里说：
 
 > 帮我检查一下 Skill 的安装，看看有没有重复或冲突。
 
@@ -27,6 +27,9 @@
 | --- | --- | --- |
 | Codex | `~/.agents/skills/skill-curator` | `<project>/.agents/skills/skill-curator` |
 | Claude Code | `~/.claude/skills/skill-curator` | `<project>/.claude/skills/skill-curator` |
+| WorkBuddy | `~/.workbuddy/skills/skill-curator` | `<project>/.workbuddy/skills/skill-curator` |
+
+WorkBuddy 的上传界面请使用专用的 [skill-curator-workbuddy.zip](dist/skill-curator-workbuddy.zip)。该包的 ZIP 根目录直接放 `SKILL.md`，只包含运行所需的 `scripts/` 与 `references/`，符合其目录层级限制。导入后可直接说“帮我检查一下 Skill 的安装”。修改源码后运行 `python3 build_workbuddy_zip.py` 可重新生成上传包。
 
 从 GitHub 安装到个人目录时，选择与你使用的宿主对应的一条命令：
 
@@ -51,7 +54,7 @@ python3 "$SC" route --task "整理销售数据并做图表" --host codex --proje
 python3 "$SC" validate --skill /path/to/skill-curator/SKILL.md
 ```
 
-每条只读命令可按需使用 `--json`；`check`、`inventory`、`audit` 和 `route` 支持 `--host codex|claude|both`、`--no-cache`。缓存项默认会列出，但标记为启用状态未知，路由时不作为候选。
+每条只读命令可按需使用 `--json`；`check`、`inventory`、`audit` 和 `route` 支持 `--host codex|claude|workbuddy|both`、`--no-cache`。缓存项默认会列出，但标记为启用状态未知，路由时不作为候选。
 
 ## 预览、应用与回滚
 
@@ -95,7 +98,7 @@ python3 -m unittest discover -s tests -v
 python3 scripts/skill_curator.py validate --skill SKILL.md
 ```
 
-核心格式遵循 [Agent Skills 规范](https://agentskills.io/specification)；Codex 与 Claude Code 的目录和调用行为分别以各自的官方文档为准。
+核心格式遵循 [Agent Skills 规范](https://agentskills.io/specification)；各宿主的目录和调用行为以其官方文档为准。[WorkBuddy 开放平台的技能结构说明](https://open.workbuddy.cn/docs/skill)包含上传包的资源目录要求。
 
 ## License
 

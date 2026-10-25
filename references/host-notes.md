@@ -8,6 +8,10 @@ Codex discovers repository skills in `.agents/skills` along the working director
 
 Claude Code discovers personal skills at `~/.claude/skills` and project skills at `.claude/skills`. `disable-model-invocation: true` means user-only invocation; `user-invocable: false` means model-only. User settings can override visibility through `skillOverrides`. Same-name priority, nested project skills, synced skills and plugin namespaces have host-specific behavior. This tool surfaces possible name collisions but does not claim one universal winner.
 
+## WorkBuddy
+
+The scanner checks `~/.workbuddy/skills` and `.workbuddy/skills` along the project path. WorkBuddy may also show skills from its market or other configured locations; finding a file does not establish that it is enabled. Use `--host workbuddy` to focus a report on these local files. WorkBuddy's upload package should place `SKILL.md` at the ZIP root with at most one resource directory below it.
+
 ## Reading findings
 
 - `same_name`: direct naming ambiguity, especially across scopes.

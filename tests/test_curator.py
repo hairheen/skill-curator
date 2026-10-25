@@ -127,6 +127,17 @@ class CuratorTests(unittest.TestCase):
         result = curator.route(skills, "帮我检查一下 skill 的安装", "codex")
         self.assertEqual(result["matches"][0]["name"], "skill-curator")
 
+    def test_workbuddy_skill_is_discovered_and_reported(self):
+        workbuddy = self.base / ".workbuddy/skills"
+        make_skill(workbuddy, "report-helper", "Create report documents.")
+        project = self.base / "project"
+        project.mkdir()
+        with patch.object(curator.Path, "home", return_value=self.base):
+            skills, warnings = curator.discover(project, include_cache=False, host="workbuddy")
+        self.assertFalse(warnings)
+        self.assertEqual([(s.host, s.name) for s in skills], [("workbuddy", "report-helper")])
+        self.assertEqual(curator.check_report(skills, [])["summary"]["by_host"]["workbuddy"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
