@@ -1,5 +1,7 @@
 # Skill Curator
 
+<img src="assets/logo.png" alt="Skill Curator logo" width="160">
+
 一个离线 Agent Skill，用于盘点本机 Codex、Claude Code 与 WorkBuddy 的 Skills，发现可能重复的能力、触发词重叠和相反的正文指令，并在审阅差异后安全修改 `description`。Python 3.10+，运行时只用标准库。
 
 它提供四个主要能力：
