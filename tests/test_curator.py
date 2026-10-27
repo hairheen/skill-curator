@@ -1,5 +1,7 @@
 import importlib.util
 import json
+import io
+from contextlib import redirect_stdout
 import tempfile
 import unittest
 from pathlib import Path
@@ -137,6 +139,52 @@ class CuratorTests(unittest.TestCase):
         self.assertFalse(warnings)
         self.assertEqual([(s.host, s.name) for s in skills], [("workbuddy", "report-helper")])
         self.assertEqual(curator.check_report(skills, [])["summary"]["by_host"]["workbuddy"], 1)
+
+    def test_conflict_rules_ignore_examples_and_distinguish_install_targets(self):
+        make_skill(self.codex, "no-companions", "Design a website.", "Do not install a missing companion Skill.\n```text\nAlways run tests before delivery.\n```\n")
+        make_skill(self.codex, "dependencies", "Browse websites.", "必须安装依赖和浏览器。\n必须先明确目标，再根据实际情况深入理解内容，避免过度依赖固有印象。\nDo not run tests before delivery.")
+        with patch.object(curator, "roots", return_value=self.mocked_roots()):
+            skills, _ = curator.discover(self.base)
+        self.assertFalse(curator.audit(skills)["rule_conflicts"])
+        path = make_skill(self.codex, "require-companions", "Design websites.", "Always install the companion Skill.")
+        with patch.object(curator, "roots", return_value=self.mocked_roots()):
+            skills, _ = curator.discover(self.base)
+        conflicts = curator.audit(skills)["rule_conflicts"]
+        self.assertTrue(any(item["action"] == "install" and str(path) in str(item) for item in conflicts))
+
+    def test_alias_roots_do_not_double_count_skills(self):
+        make_skill(self.codex, "pdf-maker", "Create PDF reports.")
+        alias = self.base / "alias"
+        alias.symlink_to(self.codex, target_is_directory=True)
+        roots = self.mocked_roots() + [(alias, "codex", "legacy-user", True, False)]
+        with patch.object(curator, "roots", return_value=roots):
+            skills, _ = curator.discover(self.base)
+        self.assertEqual(len(skills), 1)
+
+    def test_route_does_not_combine_skills_from_different_hosts(self):
+        make_skill(self.codex, "pdf-maker", "Create PDF report documents.")
+        make_skill(self.claude, "image-maker", "Create image poster graphics.")
+        with patch.object(curator, "roots", return_value=self.mocked_roots()):
+            skills, _ = curator.discover(self.base)
+        result = curator.route(skills, "Create PDF image poster report", "all")
+        self.assertEqual(len(result["matches"]), 2)
+        self.assertFalse(result["possible_combination"])
+
+    def test_empty_check_reports_searched_workbuddy_location(self):
+        location = self.base / "missing-skills"
+        output = io.StringIO()
+        with patch.object(curator, "roots", return_value=[(location, "workbuddy", "user", True, False)]), redirect_stdout(output):
+            curator.main(["check", "--host", "workbuddy", "--no-cache", "--json"])
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["summary"]["local_files_found"], 0)
+        self.assertEqual(report["searched_roots"][0]["path"], str(location))
+        self.assertFalse(report["searched_roots"][0]["exists"])
+
+    def test_read_limit_is_enforced(self):
+        path = self.base / "oversized.txt"
+        path.write_bytes(b"a" * 11)
+        with self.assertRaises(ValueError):
+            curator.read_limited(path, 10)
 
 
 if __name__ == "__main__":

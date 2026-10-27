@@ -21,3 +21,5 @@ The scanner checks `~/.workbuddy/skills` and `.workbuddy/skills` along the proje
 - `cache`: a file found in a plugin cache. Presence does not prove the plugin is active.
 
 `route` compares wording and capabilities; it cannot reproduce Codex or Claude Code's internal model selection. Validation cases test this diagnostic only. The scanner never executes discovered code or sends its content to a service.
+
+Version 1.2.0 excludes fenced code examples from instruction-conflict matching, limits action matching within Chinese clauses, and separates installing Skills from installing runtime dependencies. These filters reduce false positives but can also miss nuanced or conditional rules. Combination suggestions stay within one host. Equivalent filesystem roots are deduplicated while individual symlink aliases remain visible and read-only.

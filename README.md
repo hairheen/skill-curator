@@ -13,6 +13,8 @@
 
 本项目的出发点、五个参考项目的完整代码审阅及设计取舍见[研究报告](docs/research.md)。
 
+当前 WorkBuddy 版本为 **1.2.0**：[下载本次上传包](dist/skill-curator-workbuddy-v1.2.0.zip)。这版减少中文长句和代码示例引起的规则误报，区分“安装其他 Skill”和“安装运行依赖”，避免跨宿主推荐组合，并修复同一目录经不同路径被重复计数的问题。WorkBuddy 中的普通检查优先扫描 WorkBuddy 本地 Skills；没有找到文件时会说明路径和访问限制。打包器会检查中英文示例数量，并生成带版本号的文件。更新已有市场条目时保留原来的 `name: skill-curator`。
+
 ## 最简单的用法
 
 安装后，直接在 Codex、Claude Code 或 WorkBuddy 对话里说：

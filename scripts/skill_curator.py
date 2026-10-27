@@ -37,7 +37,7 @@ RULE_ACTIONS = {
     "commit": r"\b(?:git commit|commit (?:changes|code|the branch)|push (?:changes|commits|to (?:remote|origin))|merge (?:the )?(?:pr|pull request|branch))\b|提交代码|推送(?:代码|提交)|合并(?:分支|PR|拉取请求)",
     "test": r"\b(test|tests|testing|validate)\b|测试|验证",
     "network": r"\b(browse|internet|network|web search)\b|联网|浏览网页|网络搜索",
-    "install": r"\b(install|dependency|dependencies)\b|安装|依赖",
+    "install": r"\binstall(?:ing|ation)?\b|安装",
     "subagent": r"\b(subagent|sub-agent|delegate)\b|子代理|子agent|委派",
     "execute": r"\b(execute|run script|shell command)\b|执行脚本|运行命令",
 }
@@ -78,9 +78,11 @@ def digest(data: bytes) -> str:
 
 
 def read_limited(path: Path, limit: int) -> bytes:
-    if path.stat().st_size > limit:
+    with path.open("rb") as stream:
+        data = stream.read(limit + 1)
+    if len(data) > limit:
         raise ValueError(f"file exceeds {limit} bytes")
-    return path.read_bytes()
+    return data
 
 
 def scalar(value: str) -> str:
@@ -258,9 +260,14 @@ def discover(project: Path, include_cache: bool = True, host: str = "both") -> t
     found: list[Skill] = []
     warnings: list[str] = []
     seen: set[tuple[str, str]] = set()
+    seen_roots: set[tuple[str, str]] = set()
     for root, product, scope, mutable, recursive in roots(project, include_cache):
         if host not in ("both", "all", product):
             continue
+        root_key = (product, str(root.resolve()))
+        if root_key in seen_roots:
+            continue
+        seen_roots.add(root_key)
         try:
             paths = scan_root(root, recursive)
         except OSError as exc:
@@ -303,11 +310,22 @@ def overlap(a: Skill, b: Skill, common: set[str]) -> dict | None:
 
 def rules(skill: Skill) -> list[dict]:
     result = []
-    text = Path(skill.path).read_text(encoding="utf-8")
+    text = read_limited(Path(skill.path), MAX_SKILL_BYTES).decode("utf-8")
     _, body, bounds = frontmatter(text)
     offset = bounds[1] + 1 if bounds else 0
+    fence = None
     for line_no, line in enumerate(body.splitlines(), offset + 1):
-        for clause in re.split(r"[.;!?。；]", line):
+        marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if marker:
+            value = marker.group(1)
+            if fence is None:
+                fence = value
+            elif value[0] == fence[0] and len(value) >= len(fence):
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        for clause in re.split(r"[;!?。；]|\.(?=\s|$)", line):
             stripped = clause.strip()
             if not stripped or len(stripped) > 500:
                 continue
@@ -322,10 +340,22 @@ def rules(skill: Skill) -> list[dict]:
                 continue
             polarity = "negative" if negative else "positive"
             tail = stripped[negative_match.end():] if negative_match else stripped[positive_match.end():] if positive_match else stripped
+            # Chinese prose has no word spaces: stop at clause boundaries and
+            # limit proximity so a distant noun is not attached to the modal.
+            tail = re.split(r"[,，:：—]", tail, maxsplit=1)[0]
             action_phrase = " ".join(tail.split()[:6])
+            if re.search(r"[\u3400-\u9fff]", action_phrase):
+                action_phrase = action_phrase[:24]
             for action, pattern in RULE_ACTIONS.items():
-                if re.search(pattern, action_phrase, re.I):
-                    result.append({"action": action, "polarity": polarity, "path": skill.path, "line": line_no, "quote": stripped[:240]})
+                match = re.search(pattern, action_phrase, re.I)
+                if match:
+                    subject = "general"
+                    if action == "install":
+                        if re.search(r"\b(skills?|companion)\b|技能", action_phrase, re.I):
+                            subject = "skill"
+                        elif re.search(r"\b(dependenc\w*|packages?|browser)\b|依赖|浏览器", action_phrase, re.I):
+                            subject = "dependency"
+                    result.append({"action": action, "subject": subject, "polarity": polarity, "path": skill.path, "line": line_no, "quote": stripped[:240]})
     return result
 
 
@@ -367,7 +397,7 @@ def audit(skills: list[Skill]) -> dict:
             for action in RULE_ACTIONS:
                 left_rules = [r for r in rule_map[a.path] if r["action"] == action]
                 right_rules = [r for r in rule_map[b.path] if r["action"] == action]
-                pair = next(((left, right) for left in left_rules for right in right_rules if left["polarity"] != right["polarity"]), None)
+                pair = next(((left, right) for left in left_rules for right in right_rules if left["polarity"] != right["polarity"] and left["subject"] == right["subject"]), None)
                 if pair and len(conflicts) < 100:
                     conflicts.append({"type": "possible_rule_conflict", "action": action, "evidence": list(pair)})
     return {"skills": len(skills), "local_files_found": len(active), "cached_unverified": len(skills) - len(active), "overlaps": overlaps, "rule_conflicts": conflicts, "security_signals": [dict(skill=s.name, **signal) for s in skills for signal in security_signals(s)]}
@@ -421,7 +451,7 @@ def route(skills: list[Skill], task: str, host: str) -> dict:
     combo = []
     if len(scored) >= 2 and scored[1]["score"] >= 0.2:
         first, second = scored[:2]
-        if set(first["matched_capabilities"]) != set(second["matched_capabilities"]):
+        if first["host"] == second["host"] and first["name"] != second["name"] and set(first["matched_capabilities"]) != set(second["matched_capabilities"]):
             combo = [first["name"], second["name"]]
     return {"task": task, "host": host, "matches": scored[:8], "possible_combination": combo, "note": "Lexical diagnostic only; host model selection may differ."}
 
@@ -633,6 +663,11 @@ def main(argv: list[str] | None = None) -> int:
     skills, warnings = discover(Path(args.project), include_cache=not args.no_cache, host=args.host)
     if args.command == "check":
         result = check_report(skills, warnings)
+        result["searched_roots"] = [
+            {"host": product, "scope": scope, "path": str(root.absolute()), "exists": root.is_dir()}
+            for root, product, scope, _, _ in roots(Path(args.project), not args.no_cache)
+            if args.host in ("both", "all", product)
+        ]
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
@@ -641,6 +676,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Plugin cache entries: {summary['cached_unverified']} (enabled state unverified)")
             print(f"Installation findings: {summary['installation_findings']}; same names: {summary['same_name']}")
             print(f"Possible overlaps: {summary['possible_overlaps']}; possible rule conflicts: {summary['possible_rule_conflicts']}")
+            if not summary["local_files_found"]:
+                print("No local skill files found; searched locations:")
+                for location in result["searched_roots"]:
+                    print("  " + json.dumps(location, ensure_ascii=False))
             for item in result["installation_findings"][:10]:
                 print("  installation: " + json.dumps(item, ensure_ascii=False))
             for item in result["overlaps"][:10]:
